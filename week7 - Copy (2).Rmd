@@ -1,0 +1,606 @@
+---
+title: "Week7"
+author: "Johanne S. Rejsenhus"
+date: "2025-10-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*Good afternoon*  
+This week we will build on what you learned about correlation by extending the idea to build some regression models. Regression allows us to predict one variable from another and test how well our model fits the data.
+The goal of today’s markdown is to understand how to perform and interpret different types of linear regressions, check assumptions, and compare models.
+
+________________________________________________________________________________________
+
+**Structure of the markdown:**  
+Part 1:
+- Plot and visually explore relationships between variables  
+- Perform simple linear regression  
+- Interpret coefficients and model fit  
+- Extend regression with categorical predictors  
+- Include interaction terms  
+- Check assumptions of linear regression  
+- Visualize and interpret model results  
+- Compare models using ANOVA  
+
+Part 2:
+- Try it on your own
+
+Start with the first exercise, and then continue in order. Feel free to work together, and see how far you can get.   
+The important thing is to learn, not to necessarily do it all!
+________________________________________________________________________________________
+
+
+## Load the packages for today
+
+```{r, echo=FALSE}
+# Install pacman first (only once):
+install.packages("pacman")
+
+# Load and install packages:
+pacman::p_load(ggplot2, dplyr, tidyr, broom, performance, see, performance, lmtest, car, nortest)
+```
+
+________________________________________________________________________________________
+
+
+# Part 1
+
+## Exploring and plotting variables
+
+We will use the dataset "state.x77" to investigate whether LIfe expectancy is dependen on income and maybe also where you are living. 
+
+```{r}
+df_states <- as.data.frame(state.x77)
+df_states$Region <- state.region
+head(df_states)
+```
+
+Now, let’s explore some of the variables visually.
+
+
+```{r}
+# Relationship between Income and life expecancy
+ggplot(df_states, aes(x = Income, y = `Life Exp`)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "Relationship between Income and Life expectancy", x = "Income (per person in 1974)", y = "Life expectancy (in years)")
+```
+
+_Question:_ What kind of relationship do you see between Income and Life Expectancy?  
+# it looks like there is some correlation between the higher the income the longer you live, however it is not always true, but it does look like a pattern
+
+
+
+## Simple Linear Regression
+
+A **simple linear regression** examines the relationship between one predictor variable (X) and one outcome variable (Y).
+It fits a straight line to the data that best predicts Y from X, using the formula:
+
+$$ Y = b_0 + b_1X + \epsilon $$
+
+_Excercise:_ Add the definitions to the terms in the linear regression formula:
+
+- **Y** is the outcome and the dependent variable. The thing I want to predict, so it would be the life expectancy
+- **X** is the predictor and the independent variable. It is was is used to predict y, so it would be the income 
+- **b₀** is the intercept. It is the predicted value of y, when x = 0
+- **b₁** is the slope. It is the predicted change in y, for each unit increase in x
+- **ε** is a variable for something we cannot explain through the model.
+
+When we fit a linear model in R we use the function `lm()`. The syntax follows the formula notation: lm(outcome ~ predictor, data = dataset)
+
+This means “predict outcome from predictor using the data from dataset".
+Now, let’s try it out:
+
+
+```{r}
+model_income <- lm(`Life Exp` ~ Income, data = df_states)
+summary(model_income)
+```
+
+_Excercise:_ Interpret the intercept and slope:  
+- What does the slope tell us about how Life Expectancy changes with Income?  
+  - The slope is estimated to be 7.433e-04, which is a positive number, that implies that the life expectancy goes up when income does. It should be multiplied by 1000. Every 1000 dollars more income goes with about 0.74 more years of life expectancy the slope = 0.00074 per dollar.
+
+- What does the R^2 tell you about how much variance of Life expectancy that is explained by Income?
+  - The R^2 cn be seen on multiple R-squared at 0.1158. This means that the income explains about 11.58% of the variance of life expectancy. This also means that the rest of the variance about 88% is explained by something else. 
+
+- Is the relationship significant?
+- Yes, p = 0.0156, which is below .05. So the relationship is significant, but it is weak.
+
+
+## Regression with Categorical Variables
+
+Maybe your life expectancy could also depend on whether you lived in a warmer and sunnier state or a colder an more northern state. We have a categorical variable called Region, which have 4 regions: South, West, Northeast and Nortcentral. Let’s add the region of the state as a categorical variable that might help us predict Life expectancy.
+
+```{r}
+model_income_region <- lm(`Life Exp` ~ Income + Region, data = df_states)
+summary(model_income_region)
+```
+
+_Excercise:_ Why is there only 3 regions here and not all 4?
+- It shows 3 regions because one region is used as the reference group. It is Northeast, because R puts the regions in alphabetical order and uses the first one.
+
+
+Also, Maybe you noticed that Income is no longer significant (p-value > 0.5).
+That is likely because Income and region is somewhat correlated meaning that when we add a correlated predictor (like region) it can “soak up” variance, making previously significant predictors non-significant. However, as the R-sqared (variance explained) is increasing a lot (from 0.09 to 0.34) we still have a model that explains more of the variance in Life expectancy. 
+
+_Excercise:_ Only one region is a significant predictor, what does it show about life expectancy in the southern states? 
+
+- Southern states have a significantly lower life expectancy than Northeastern states. The southern estimate is -1,47, which indicates that the people in the southern states live about 1,5 years shorter than the reference group. p= 0,0038 which is under 0,05 an therefore significant 
+
+
+
+## Regression with Interaction
+
+Maybe Income doesn't have the same effect on income in every state? We can investigate this by adding an interaction effect.
+This allows the effect of Income on life expectancy to differ by region. Without it, the model assumes Income has the same effect everywhere, but with the interaction, each region can have its own slope, capturing (possible) variation in how income impacts life expectancy.
+
+```{r}
+model_interaction <- lm(`Life Exp` ~ Income * Region, data = df_states)
+summary(model_interaction)
+
+# Plot the interaction
+ggplot(df_states, aes(x = Income, y = `Life Exp`, color = Region)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  theme_minimal()
+```
+
+_Question:_ Does the effect of Income differ across regions? What explanations could there be for seeing different slopes in the four regions?
+- It does not differ significantly. The p-values is South = 0.729, North Central = 0.651, West = 0.201, which are all above 0.05. The slopes in the plot look a bit different. 
+- a lot of things could explain the different slopes, like the cost and need for healthcare, different lifestyles, Genetics etc.
+
+
+
+
+## Checking Model Assumptions
+
+Last week we worked with correlations, which assume our variables are normally distributed. Regression, on the other hand, does not require the variables themselves to be normal, but instead relies on assumptions about the residuals, such as linearity, constant variance, normality, and absence of strong outliers.
+
+Remember, residuals are simply the differences between the observed values and the values predicted by your model.
+
+Regression assumptions:  
+1. Linearity  
+2. Homoscedasticity (constant variance)  
+3. Normality of residuals  
+4. No strong outliers  
+5. Multicolinearity (if we have multiple predictors)
+
+We can do all assumptions tesing by using the check_model() function from the `performance` package
+
+```{r}
+# 1. Linearity
+check_model(model_income, check = "linearity")
+
+# 2. Homoscedasticity (constant variance)
+check_model(model_income, check = "homogeneity")
+
+# 3. Normality of residuals
+check_model(model_income, check = "normality")
+
+# 4. Outliers / influential points
+check_model(model_income, check = "outliers")
+
+# 5. Multicolinearity 
+performance::check_collinearity(model_income)
+```
+
+_Excercise:_ Explain and explore each plot and consider: Are the assumptions met?
+1. Linearity is not fully met
+The green line is not flat. It curves like an arch, especially at the right end. This means a straight line doesn’t fit perfectly.
+
+2. Homogeneity of variance is slightly violated
+The green line is not flat. It goes up on the right side, so the spread of the residuals gets bigger for the highest predicted values. This is small, and it is mostly caused by the one point at the far right.
+
+3. Normality of residuals is mostly OK
+The blue distribution has roughly a bell shape and is close to the green normal curve. It is a little skewed to the left but not dramatically.
+
+4. Influential observations has one problem
+Observation 2 the red lies right on the contour line, and it has high leverage, far to the right on the x-axis. Other points are inside the lines, so they are fine.
+
+We can also do numerical tests of our assumptions:
+
+```{r}
+
+# 1. Linearity (Ramsey RESET test)
+lmtest::resettest(model_income)
+
+# 2. Homoscedasticity (Breusch-Pagan test)
+
+lmtest::bptest(model_income)
+
+# 3. Normality of residuals (Shapiro-Wilk test)
+shapiro.test(residuals(model_income))
+
+# 4. Outliers
+car::outlierTest(model_income)
+
+# 5. Multicollinearity
+performance::check_collinearity(model_income)
+
+```
+*How to read the results*
+For the first three assumptions we have a violation if the p-value is below 0.05 as we reject the null-hypothesis (that there is no violation). 
+So high p-value (>0.05) = No violation 
+Low p-value (<0.05) = Violation
+
+The outlierTest always gives you the "outlier" also when not significant - so ALWAYS check the visual inspection before removing
+
+But never only do numerical tests, see them as a supplement to visually inspecting the data
+
+
+_Exercise_ Report the findings from the numerical tests, are they similar to what you described after visually inspecting the plots above?
+
+The p-value = 0.001551 which means the reset test is significant. So the linearity assumption is violated, which matches the curved line in the plot.
+The Breusch-Pagan test shows p = 0.104 and the Shapiro-Wilk test shows p = 0.735 meaning they were not significant, so there is no clear violation of constant variance or normality.
+
+The outlier test showed no significant outliers. which is also confirmed by the table with alaska having a Bonferroni p = 0.372. 
+
+So, what can we do? 
+Let's remove the outlier from our data - the esiest would be to remove it here and then re-running the models on the now clean data
+```{r}
+# Which state is the outlier?
+
+# Remove the observation (state)
+df_states_clean <- df_states[-2, ]
+
+# Go back up and refit the model with the clean data
+
+```
+
+Well not much have changed,
+Let's try some transformations. Use log() or sqrt() depending on what you believe is necessary. Transforming your variables will not always solve your problems, but should be the first step. Remember - when we work on our projects you will not have to know by heart what to do when at all times. Anna and I are here to help :)
+
+If you want to read more on transformations heres a good article: https://medium.com/@muhammadibrahim_54071/why-and-which-data-transformation-should-i-use-cfb9e31923cf
+
+```{r}
+# Transform the variables when running the model and check assumptions again
+
+model_income_transformed <- lm(`Life Exp` ~ log(Income), data = df_states)
+summary(model_income_transformed)
+
+```
+
+
+As the transformations didn't improve anything much, we will for teaching purposes just power through with the model_income But, If you stumble into such problems in your projects - find me and well problem solve further. :))
+
+
+## Comparing Models Using ANOVA
+
+```{r}
+anova(model_income, model_income_region, model_interaction)
+```
+
+**Question:**  
+- Does the more complex model significantly improve fit?  
+  - Adding Region does yes p = 0.000558. Adding the interaction does not no p = 0.218.
+
+- Which model would you choose and why? hint: look at the p-value and residual sum of squares (annas lecture)
+  - Model 2 which takes Income + Region. It fits better than Income alone it has lower RSS and p < 0.05, and the interaction doesn’t improve it further.
+
+
+## Visualising and Interpreting the Model
+
+You can visualize model predictions and fit.
+
+```{r}
+# Change your_chosen_model with the actual model name 
+ggplot(model_income_region, aes(x = Income, y = `Life Exp`, color = Region)) +
+  geom_point() +
+  geom_line(aes(y = predict(model_income_region)), size = 1) +
+  theme_minimal()
+
+summary(model_income_region)
+```
+
+**Interpretation:**  
+- Which predictors are significant?  
+  - Only RegionSouth is a significant predictor (p = 0.004). 
+- How much variance does the model explain (R²)?  
+  - The model explains about 39% of the variance in life expectancy (R² = 0.394). 
+- Are the model’s residuals well-behaved?
+  - The residuals look ok, based on the assumption plots.
+
+
+
+
+*OBS* As you now should know - models are not always significant and well behaving even if we wish them to be. So when doing you exams, It will be absolutely okay to conclude that you simply did not find significant results for your research question. 
+
+________________________________________________________________________________________
+
+# Part 2:
+## Now we try and use our new knowledge for a mini-project.  
+For this, I have made a checklist you can run through.
+
+### Step 1: Understand Your Data
+- [ ] Load the dataset into R  
+- [ ] Identify your outcome (dependent variable) and predictor(s) (independent variables)  
+- [ ] Determine whether predictors are continuous or categorical  
+
+### Step 2: Explore Relationships
+- [ ] Plot scatterplots between your predictors and outcome  
+- [ ] Try different plots for categorical variables (boxplots, violin plots, etc.)  
+- [ ] Look for linear trends or group differences visually  
+
+### Step 3: Fit a Simple Regression
+- [ ] Run a simple linear regression using `lm(outcome ~ predictor, data = yourdata)` - remember: outcome needs to be continuous
+- [ ] Inspect the model summary and note the intercept, slope, and R²  
+- [ ] Interpret whether the relationship is significant and meaningful  
+
+### Step 4: If it fits with your RQ
+- [ ] Add another (categorical) predictor to create a multiple regression model  
+- [ ] Add an interaction term if you expect the effect of one variable to depend on another  
+- [ ] Interpret how the model changes compared to the simple regression  
+
+### Step 5: Check Model Assumptions
+- [ ] Plot residuals to check for linearity and homoscedasticity  
+- [ ] Inspect Q-Q plot for normality of residuals  
+- [ ] Identify potential outliers or influential cases  
+
+### Step 6: Visualise and Interpret
+- [ ] Visualise the fitted regression line(s)  
+- [ ] Compare how predictions differ by group or interaction  
+- [ ] Interpret the meaning of the coefficients in context  
+
+### Step 7: Compare Models
+- [ ] Use `anova(model1, model2, model3)` to compare models  
+- [ ] Identify which model provides the best fit (highest R², or significant ANOVA result)  
+- [ ] Explain why you would choose that model for interpretation  
+
+### Step 8: Report and Reflect
+- [ ] Summarize your findings clearly  
+- [ ] Include coefficients, p-values, R², and model comparison results  
+- [ ] Discuss what the results tell you about the data and research question  
+
+________________________________________________________________________________________
+
+```{r}
+# I will do the assignments from portfolio 2, from brightspace. With the divorce margins and education. 
+# First I install the dslabs packages
+
+install.packages("dslabs")
+library(dslabs)
+
+```
+
+```{r}
+
+# First I load the divorce data 
+# I use the function head to see the first few rows. 
+
+data("divorce_margarine")
+head(divorce_margarine)
+
+```
+```{r}
+
+#Variable 1 = margarine_consumption_per_capita, which is the margarine consumption per person
+#Variable 2 = divorce_rate_maine which is the divorce rate in Maine
+#Both variables are continuous, so a Pearson correlation is appropriate. The data are yearly values.
+
+# Then I will make a scatterplot with a regression line
+# The margarine consumtion is going to be on the x-axis and the divorce rate on the y-axis 
+# I will also be giving the table some axis titles 
+
+ggplot(divorce_margarine,
+       aes(x = margarine_consumption_per_capita, y = divorce_rate_maine)) +
+  geom_point(color = "steelblue", size = 2) +
+  geom_smooth(method = "lm", se = FALSE, color = "darkred") +
+  theme_minimal() +
+  labs(title = "Margarine consumption and divorce rate in Maine",
+       x = "Margarine consumption per capita (lbs)",
+       y = "Divorce rate in Maine (per 1000 people)")
+
+```
+
+```{r}
+# The scatterplot shows a strong linear regression. This could indicate that years with higher margarine consumption also have a higher divorce rate. The points lie close to the line.
+
+# I will now do a correlation test 
+
+cor.test(divorce_margarine$margarine_consumption_per_capita,
+         divorce_margarine$divorce_rate_maine)
+```
+#Comment 
+There is a strong, positive correlation between margarine consumption and the divorce rate in Maine, r = 0.99, p < 0.001. meaning that the years with higher margarine consumption had higher divorce rates.
+
+The correlation is almost perfect, but that does not mean that margarine consumption causes divorce, or that divorce makes people eat more margarine. This is a spurious correlation. That means that both variables change over time, so they happen to move together without any real connection. 
+
+Other variables could explain the pattern. The sample is also very small with only 10 years, which makes chance patterns more likely. This is a good example of how a correlation does not imply causation, and that a high correlation and a low p-value should always be interpreted with common sense.
+
+
+#Part 2 of the portfoilio exam. 
+
+```{r}
+# First I load the right packages 
+pacman::p_load(car, dplyr, ggplot2, performance, see, lmtest)
+
+# GSSvocab comes with the 'car' package
+# The first thing I do is filter(year == 1978), to keep only the year 1978
+# The second thing I do is select(...), which allows me to keep only the variables I need, I will already now include the nativeBorn variable, so I have it for later
+# The third step is na.omit(), which removes all rows with missing values
+# Lastly I use head and str to see the table and output
+df_vocab <- GSSvocab %>%
+  filter(year == 1978) %>%
+  select(vocab, educ, nativeBorn) %>%
+  na.omit()
+
+head(df_vocab)   # look at the first rows
+str(df_vocab)    # check the type of each variable
+```
+#The variables are
+
+Outcome which is the dependent variable is vocab. The score on a vocabulary test. This is the thing I want to predict. It is continuous (a number), which is required for linear regression.
+Predictor 1 = educ. the years of education. It is continuous.
+Predictor 2 = nativeBorn. Whether the person was born in the US. It is categorical and has a factor with 2 levels. It is also a boolean with a yes/no answer
+
+```{r}
+# Next I will explore the relationsships 
+
+# First I make a scatterplot with education on x-axis and vocabulary on y-axis 
+# the function geom_jitter() moves the points slightly, because many people have the same education and vocab score, and they would otherwise lie on top of each other
+# I will give the visualisation colours and axis titles 
+
+ggplot(df_vocab, aes(x = educ, y = vocab)) +
+  geom_jitter(width = 0.2, height = 0.2, alpha = 0.5, color = "steelblue") +
+  geom_smooth(method = "lm", se = FALSE, color = "darkred") +   # the regression line
+  theme_minimal() +
+  labs(title = "Vocabulary score and education (1978)", 
+       x = "Years of education",
+       y = "Vocabulary test score")
+```
+```{r}
+# I will now also od a boxplot with vocabulary by native-born status
+# For a categorical predictor I compare groups instead of looking at a line
+
+ggplot(df_vocab, aes(x = nativeBorn, y = vocab, fill = nativeBorn)) +
+  geom_boxplot(alpha = 0.7) +
+  theme_minimal() +
+  labs(title = "Vocabulary score by native-born status",
+       x = "Born in the US?",
+       y = "Vocabulary test score",
+       fill = "Native born")
+```
+#Comment
+The scatterplot shows a positive linear relationship between education and vocabulary score. This indicates that people with more years of education have a higher score on the vocabulary test. 
+The points are spread all around the regression line. This suggests that education explains only part of the variation in vocabulary. 
+
+The boxplot shows that native-born people have a higher median vocabulary score around 6, which is more than the non-native born people that is around 5. The non-native born group also varies more in their scores. The two groups overlap, so the difference is probably modest.
+
+```{r}
+# For the first model (model1) I want to predict vocabulary from education
+# The code syntax is = lm(outcome ~ predictor, data = dataset)
+
+model1 <- lm(vocab ~ educ, data = df_vocab)
+summary(model1)
+```
+#Comment
+Intercept (b₀) = The predicted vocab score when education = 0 years. It is just the starting point of the line. It is not very meaningful in practice, because nobody has 0 years of education. here it is 1.24
+
+educ / slope (b₁) = How many points vocab changes for each extra year of education. This is the main result and is 0.39. For each extra year of education, the vocabulary score goes up by about 0.39 points
+
+p < 2e-16 = This is far below 0.001, so the relationship is significant because p < .001.
+
+R² = 0.2877 = This means the education explains about 28.77% of the variance in vocabulary scores. The rest which is about 71%is explained by other factors.
+
+Residual standard error = 1.884. This means the predictions from education alone are typically off by about 1.9 points on the 0 to 10 scale.
+
+```{r}
+# For the second mode (model2) I want to add a categorical predictor
+# The model now estimates the effect of education and of native-born status at the same time. The effect of each is "controlled for" the other.
+
+model2 <- lm(vocab ~ educ + nativeBorn, data = df_vocab)
+summary(model2)
+```
+#Comment 
+educ / the slope = 0.39209. Meaning each extra year of education goes with about 0.39 more vocabulary points, when native-born status is held constant. It is almost the same as in Model 1 where it was 0.39237, so education’s effect is stable.
+
+nativeBornyes = 0.65. This indicates that native-born people score about 0.65 points higher than non-native born people, which is the reference group, with the same level of education.
+
+Intercept = 0.63 = The predicted score for a non-native born person with 0 years of education. It is just the starting point of the line, but fairly different from model1 with 1.24
+
+R² = 0.29 = The model explains about 29% of the variance. In Model 1 it was 28.8%, so adding native-born status only increased it by about 0.5 percentage points.
+
+```{r}
+# For model 3 (model3) i want the interaction (educ * nativeBorn)
+# The * means include educ, nativeBorn and their interaction
+# the interaction asks: "Is the effect of education different for native-born and non-native born people?"
+model3 <- lm(vocab ~ educ * nativeBorn, data = df_vocab)
+summary(model3)
+```
+#Comment
+educ:nativeBornyes = -0.03. This is the interaction. It shows how much the education slope differs for native-born people. The difference is very small and not significant. with a p = .662
+
+educ = 0.42 (p < .001). In this model, this is the education slope for the reference group which is the non-native born.
+
+Slope for native-born is 0.415 + (−0.025) = 0.39. So the slopes are 0.42 for non-native born and 0.39 for native-born, which is almost identical.
+
+nativeBornyes = 0.96 with p = .184. In this model, it is the group difference at 0 years of education, and it is not significant. 
+
+R² = .29, adjusted R² = .291. There is no improvement from Model 2 
+
+The benefit of an extra year of education is about the same for native-born and non-native born people at about 0.4 points per year. The regression lines for the two groups are therefore almost parallel, and there is no evidence that education works differently depending on whether a person was born in the US.
+
+```{r}
+# I will do a visual check of all assumptions at once
+
+# 1. Linearity
+check_model(model2, check = "linearity")
+
+# 2. Homoscedasticity (constant variance)
+check_model(model2, check = "homogeneity")
+
+# 3. Normality of residuals
+check_model(model2, check = "normality")
+
+# 4. Outliers / influential points
+check_model(model2, check = "outliers")
+
+# 5. Multicolinearity 
+check_model(model2, check = "vif")           
+```
+
+```{r}
+# Numerical tests (a supplement to the plots, never use only these)
+lmtest::resettest(model2)        # Linearity: p < .05 = violation
+lmtest::bptest(model2)           # Constant variance: p < .05 = violation
+shapiro.test(residuals(model2))  # Normality: p < .05 = violation
+car::outlierTest(model2)         # Outliers: looking at the Bonferroni p-value
+check_collinearity(model2)       # Multicollinearity: VIF < 5 is ok
+```
+#Linearity =
+The green line is almost flat and horizontal around 0, with only a very small bend. The grey band includes zero almost everywhere. This agrees with the RESET test with p = .427. The points form a grid pattern because vocab only takes whole numbers from 0-10, which is normal here. 
+
+#Homoscedasticity = 
+The green line is not completely flat. It is lower at the left end where the low predicted scores are and rises in the middle and dips a little again at the right. The residuals vary most for medium predicted scores around 4 to 7 and less at the extremes. This is a natural effect of a score that is limited to 0 to 10. The curve only varies between about 0.7 and 0.9, so the deviation is small. This fits the Breusch-Pagan test, which detects even small deviations in a large sample.
+
+#Normality of residuals = 
+The blue distribution follows the bell shape of the green normal curve very well. It looks symmetrical and the tails look fine. The Shapiro-Wilk test shows p = .004 and is most likely caused by the large sample of 1483 people and the discrete scores. It does not show a serious problem.
+
+#Outliers = 
+The most extreme observation has rstudent = -3.83, but the Bonferroni p = .195, which is above .05. So it is not a significant outlier. (The 1978.1417 is only the row label of that person, not a value.)
+
+All points are gathered around 0 and far inside the dashed contour lines. No observation has a large leverage together with a large residual. This means that no single person has a strong influence on the model. This agrees with the outlier test that has a Bonferroni p = .195.
+
+#Multicollinearity = 
+VIF is 1.00, far below 5. Education and native-born status are not related to each other in a problematic way. Both predictors have a VIF of 1, deep in the green “Low (< 5)” zone. Education and native-born status do not overlap in a problematic way.
+
+```{r}
+# Next step is to compare the models 
+
+anova(model1, model2, model3)
+```
+Each row compares a model with the one above it:
+
+Adding native-born status improved the model (p = .001), but adding the interaction did not (p = .662), so Model 2 is the best model to use here.
+Model 1 → Model 2 where native-born status is added = significant. 
+  F(1, 1480) = 10.12, p = .001. The residual error (RSS) drops from 5258.3 to 5222.6.
+  
+Model 2 → Model 3 where the interaction is added = not significant. 
+  F(1, 1479) = 0.19, p = .662. The RSS does not change much (5222.6 → 5221.9).
+
+#Model comparison 
+
+An ANOVA test showed that adding native-born status to the model with education alone significantly improved the fit, F(1, 1480) = 10.12, p = .001. Adding the interaction between education and native-born status did not improve the fit further, F(1, 1479) = 0.19, p = .662.
+
+I choose Model 2. It fits significantly better than Model 1 and has the highest adjusted R² of 0.292. 
+Model 3 explains no more variance than Model 2 the adjusted R² is slightly lower, and its interaction is not significant, so the extra complexity is not worth it
+
+Model 2 is also easy to interpret in practice.Because each extra year of education is associated with about 0.39 more vocabulary points for everyone, and native-born people score about 0.65 points higher than non-native born people with the same education.
+
+#Summary of findings. 
+
+Education was a strong, significant predictor of vocabulary score in 1978 (Model 1: b = 0.39, p < .001, R² = .29). Adding native-born status gave a small but significant improvement (Model 2: b = 0.65, p = .001, R² = .29). Native-born people scored about 0.65 points higher than non-native born people with the same education. The interaction between education and native-born status was not significant (b = −0.03, p = .662), so the benefit of education was similar for both groups. Model 2 was the best model.
+
+#Reflection. 
+
+Although native-born status is statistically significant, the practical importance is small because the difference is less than 1 point on a 10-point scale, and it increased the explained variance by only about 0.5 percentage points. 
+
+The models explain only about 29% of the variance in vocabulary, so most of the variation is due to other factors, such as age, reading habits and language. The regression assumptions were mostly met, with only small violations of constant variance and normality. However this is to be expected with a 0 to 10 score and a large sample (N = 1483). 
+
+The data are observational and from 1978, so I cannot conclude that education causes higher vocabulary scores, only that they are related, and the results may not apply to the population today.
+
